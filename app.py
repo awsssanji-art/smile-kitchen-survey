@@ -12,9 +12,13 @@ st.title("Smile Kitchen アンケート一括自動集計アプリ")
 
 # 1. APIキーの設定
 st.sidebar.header("設定")
-api_key = st.sidebar.text_input("Gemini APIキーを入力してください", type="password")
-st.sidebar.markdown("[APIキーの無料取得はこちら(Google AI Studio)](https://aistudio.google.com/app/apikey)")
-
+# Streamlitのシステムに保存されたキーがあればそれを使い、無ければ入力欄を表示する
+if "GEMINI_API_KEY" in st.secrets:
+    api_key = st.secrets["GEMINI_API_KEY"]
+    st.sidebar.success("✅ APIキーは自動で読み込まれました")
+else:
+    api_key = st.sidebar.text_input("Gemini APIキーを入力してください", type="password")
+    st.sidebar.markdown("[APIキーの無料取得はこちら(Google AI Studio)](https://aistudio.google.com/app/apikey)")
 # 2. 複数PDFのアップロード
 uploaded_files = st.file_uploader(
     "アンケートのPDFファイルをアップロードしてください（複数選択可）", 
