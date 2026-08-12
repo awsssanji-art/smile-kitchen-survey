@@ -3,6 +3,7 @@ import fitz  # PyMuPDF
 from PIL import Image
 import io
 import json
+import time  # ← 【追加】休憩時間を管理する機能
 import pandas as pd
 import plotly.express as px
 import google.generativeai as genai
@@ -12,13 +13,13 @@ st.title("Smile Kitchen アンケート一括自動集計アプリ")
 
 # 1. APIキーの設定
 st.sidebar.header("設定")
-# Streamlitのシステムに保存されたキーがあればそれを使い、無ければ入力欄を表示する
 if "GEMINI_API_KEY" in st.secrets:
     api_key = st.secrets["GEMINI_API_KEY"]
     st.sidebar.success("✅ APIキーは自動で読み込まれました")
 else:
     api_key = st.sidebar.text_input("Gemini APIキーを入力してください", type="password")
     st.sidebar.markdown("[APIキーの無料取得はこちら(Google AI Studio)](https://aistudio.google.com/app/apikey)")
+
 # 2. 複数PDFのアップロード
 uploaded_files = st.file_uploader(
     "アンケートのPDFファイルをアップロードしてください（複数選択可）", 
@@ -26,7 +27,6 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
-# 【変更点】自由記述の「感情分類」をAIに判定させるよう指示を追加
 prompt_text = """
 あなたはデータ入力のスペシャリストです。提供されたアンケート画像から、以下の項目を正確に読み取り、必ず指定されたJSONフォーマットのみで出力してください。
 マークされていない、または無記入の項目は空文字 "" としてください。数値は数字のみを出力してください（例: "5"）。
@@ -93,6 +93,9 @@ if uploaded_files and api_key:
                 
                 current_page_num += 1
                 progress_bar.progress(current_page_num / total_pages, text=f"処理中... ({current_page_num}/{total_pages}ページ完了)")
+                
+                # 【追加】無料枠のスピード制限（エラー429）を回避するため、4秒間の一時停止を入れる
+                time.sleep(4)
         
         progress_bar.empty()
         st.success("すべての読み取りが完了しました！")
@@ -103,7 +106,6 @@ if uploaded_files and api_key:
             cols = cols[-1:] + cols[:-1]
             df = df[cols]
             
-            # 【変更点】Q1_日時から「〇月〇日」の部分だけを抽出して新しい列を作る
             if "Q1_日時" in df.columns:
                 df['抽出日付'] = df['Q1_日時'].astype(str).str.extract(r'(\d{1,2}月\d{1,2}日)')
                 df['抽出日付'] = df['抽出日付'].fillna('日付不明')
@@ -121,7 +123,6 @@ if uploaded_files and api_key:
                 )
             
             with tab2:
-                # 【変更点】日別集計グラフの追加
                 st.subheader("📅 日別のアンケート回収数")
                 if "抽出日付" in df.columns:
                     date_counts = df[df['抽出日付'] != '日付不明']['抽出日付'].value_counts().reset_index()
@@ -171,26 +172,21 @@ if uploaded_files and api_key:
                     st.plotly_chart(fig_avg, use_container_width=True)
 
             with tab3:
-                # 【変更点】ネガティブな意見とポジティブな意見を分類して表示
                 st.subheader("お客様からの自由記述・ご意見")
                 
                 if "自由記述" in df.columns and "自由記述_分類" in df.columns:
-                    # 空欄を除外
                     df_opinions = df[df["自由記述"].str.strip() != ""]
                     
-                    # ネガティブ・改善要望を抽出して赤・黄色系のボックスで表示
                     negatives = df_opinions[df_opinions["自由記述_分類"].str.contains("ネガティブ|改善", na=False)]
                     st.markdown("### ⚠️ 改善要望・ネガティブなご意見")
                     if not negatives.empty:
                         for idx, row in negatives.iterrows():
-                            # Q1_日時も合わせて表示して、いつの意見か分かりやすくする
                             st.warning(f"**{row['Q1_日時']}** (ファイル: {row['元ファイル名']})\n\n> {row['自由記述']}")
                     else:
                         st.success("ネガティブなご意見や改善要望はありませんでした！")
                     
                     st.divider()
                     
-                    # ポジティブ・その他の意見を抽出して青系のボックスで表示
                     positives = df_opinions[~df_opinions["自由記述_分類"].str.contains("ネガティブ|改善", na=False)]
                     st.markdown("### ✨ ポジティブ・その他のご意見")
                     if not positives.empty:
