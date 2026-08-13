@@ -4,3 +4,4 @@ pillow
 pandas
 plotly
 google-generativeai
+gspread   ←（これを追加）
