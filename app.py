@@ -88,7 +88,6 @@ with col2:
         st.markdown('<div class="main-title">🍳 Smile Kitchen 🤖</div>', unsafe_allow_html=True)
 
 st.markdown('<div class="sub-title">AIアンケート一括自動集計アプリ</div>', unsafe_allow_html=True)
-
 # サイドバー設定
 st.sidebar.markdown("## ⚙️ 設定")
 st.sidebar.markdown('<div class="pop-container">', unsafe_allow_html=True)
