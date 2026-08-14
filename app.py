@@ -78,7 +78,15 @@ def load_from_spreadsheet():
 # ==========================================
 # 3. アプリメイン画面
 # ==========================================
-st.markdown('<div class="main-title">🍳 Smile Kitchen 🤖</div>', unsafe_allow_html=True)
+# 画面の中央にロゴ画像を配置する
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    try:
+        # 画像ファイル名はアップロードしたものに合わせる(logo.png または logo.jpg)
+        st.image("logo.png", use_container_width=True)
+    except:
+        st.markdown('<div class="main-title">🍳 Smile Kitchen 🤖</div>', unsafe_allow_html=True)
+
 st.markdown('<div class="sub-title">AIアンケート一括自動集計アプリ</div>', unsafe_allow_html=True)
 
 # サイドバー設定
@@ -128,7 +136,7 @@ if app_mode == "🆕 新しいアンケートを読み込む":
     if uploaded_files and api_key:
         if st.button("🚀 一括読み取り＆データベース保存を開始する"):
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-flash-latest', generation_config={"response_mime_type": "application/json"})
+            model = genai.GenerativeModel('gemini-1.5-flash', generation_config={"response_mime_type": "application/json"})
             
             all_results = []
             progress_bar = st.progress(0, text="PDFを解析中...")
@@ -161,7 +169,11 @@ if app_mode == "🆕 新しいアンケートを読み込む":
                     
                     current_page_num += 1
                     progress_bar.progress(current_page_num / total_pages, text=f"処理中... ({current_page_num}/{total_pages}ページ完了)")
-                    time.sleep(6) # スピード制限回避
+                    
+                    # API制限対策をさらに強化: ページごとに15秒待機
+                    if current_page_num < total_pages:
+                        st.info(f"APIの制限を回避するため、次のページまで15秒待機しています...")
+                        time.sleep(15) 
             
             progress_bar.empty()
             
