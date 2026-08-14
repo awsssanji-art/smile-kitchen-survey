@@ -135,7 +135,7 @@ if app_mode == "🆕 新しいアンケートを読み込む":
     if uploaded_files and api_key:
         if st.button("🚀 一括読み取り＆データベース保存を開始する"):
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-1.5-flash', generation_config={"response_mime_type": "application/json"})
+            model = genai.GenerativeModel('gemini-flash-latest', generation_config={"response_mime_type": "application/json"})
             
             all_results = []
             progress_bar = st.progress(0, text="PDFを解析中...")
