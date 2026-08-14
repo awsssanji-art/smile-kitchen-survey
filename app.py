@@ -78,17 +78,15 @@ def load_from_spreadsheet():
 # ==========================================
 # 3. アプリメイン画面
 # ==========================================
-# 画面の中央にロゴ画像を配置する
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     try:
-        # 画像ファイル名はアップロードしたものに合わせる(logo.png または logo.jpg)
         st.image("logo.png", use_container_width=True)
     except:
         st.markdown('<div class="main-title">🍳 Smile Kitchen 🤖</div>', unsafe_allow_html=True)
 
 st.markdown('<div class="sub-title">AIアンケート一括自動集計アプリ</div>', unsafe_allow_html=True)
-# サイドバー設定
+
 st.sidebar.markdown("## ⚙️ 設定")
 st.sidebar.markdown('<div class="pop-container">', unsafe_allow_html=True)
 if "GEMINI_API_KEY" in st.secrets:
@@ -99,7 +97,6 @@ else:
     api_key = None
 st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
-# メインモード切り替え
 app_mode = st.radio("表示する画面を選んでください", ["🆕 新しいアンケートを読み込む", "📊 過去のデータを月別・一括で分析する"], horizontal=True)
 
 if app_mode == "🆕 新しいアンケートを読み込む":
@@ -151,43 +148,56 @@ if app_mode == "🆕 新しいアンケートを読み込む":
                     img_bytes = pix.tobytes("jpeg")
                     pil_image = Image.open(io.BytesIO(img_bytes))
                     
-                    try:
-                        response = model.generate_content([prompt_text, pil_image])
-                        result_json = json.loads(response.text)
-                        
-                        # 登録月を抽出（月別管理用）
-                        month_str = "不明"
-                        if "Q1_日時" in result_json and "月" in result_json["Q1_日時"]:
-                            month_str = result_json["Q1_日時"].split("月")[0] + "月"
+                    # 💡 自動リトライ機能（最大3回まで自力でやり直す）
+                    max_retries = 3
+                    success = False
+                    
+                    for attempt in range(max_retries):
+                        try:
+                            response = model.generate_content([prompt_text, pil_image])
+                            result_json = json.loads(response.text)
                             
-                        result_json["登録月"] = month_str
-                        result_json["元ファイル名"] = f"{file.name} (P.{page_num+1})"
-                        all_results.append(result_json)
-                    except Exception as e:
-                        st.error(f"{file.name} (P.{page_num+1}) でエラー: {e}")
+                            month_str = "不明"
+                            if "Q1_日時" in result_json and "月" in result_json["Q1_日時"]:
+                                month_str = result_json["Q1_日時"].split("月")[0] + "月"
+                                
+                            result_json["登録月"] = month_str
+                            result_json["元ファイル名"] = f"{file.name} (P.{page_num+1})"
+                            all_results.append(result_json)
+                            success = True
+                            break # 成功したらループを抜ける
+                            
+                        except Exception as e:
+                            if "429" in str(e) or "Quota" in str(e):
+                                if attempt < max_retries - 1:
+                                    st.warning(f"⚠️ {file.name} (P.{page_num+1})：API混雑のため一時停止中...30秒後に自動リトライします（{attempt+1}回目）")
+                                    time.sleep(30) # 30秒待ってから再試行
+                                else:
+                                    st.error(f"{file.name} (P.{page_num+1}) でエラー: アクセス集中によりこのページはスキップされました。")
+                            else:
+                                st.error(f"{file.name} (P.{page_num+1}) で予期せぬエラー: {e}")
+                                break
                     
                     current_page_num += 1
                     progress_bar.progress(current_page_num / total_pages, text=f"処理中... ({current_page_num}/{total_pages}ページ完了)")
                     
-                    # API制限対策をさらに強化: ページごとに15秒待機
-                    if current_page_num < total_pages:
-                        st.info(f"APIの制限を回避するため、次のページまで15秒待機しています...")
-                        time.sleep(15) 
+                    # 成功した場合もAPIのペースを保つために10秒待機
+                    if success and current_page_num < total_pages:
+                        st.info("APIの制限を回避するため、次のページまで10秒待機しています...")
+                        time.sleep(10)
             
             progress_bar.empty()
             
             if all_results:
                 df = pd.DataFrame(all_results)
-                # 列の並び替え（登録月と元ファイル名を先頭付近に）
                 cols = df.columns.tolist()
                 cols = ['登録月', 'Q1_日時', '元ファイル名'] + [c for c in cols if c not in ['登録月', 'Q1_日時', '元ファイル名']]
                 df = df[cols]
                 
-                # スプレッドシートへ自動保存
                 with st.spinner('データベースに保存しています...'):
-                    success = save_to_spreadsheet(df)
+                    success_save = save_to_spreadsheet(df)
                 
-                if success:
+                if success_save:
                     st.success("🎉 読み取りとデータベースへの保存が完了しました！")
                     st.info("上の「表示する画面を選んでください」から「📊 過去のデータを月別・一括で分析する」を選ぶと、今まで保存したすべてのデータが見られます。")
 
@@ -201,7 +211,6 @@ elif app_mode == "📊 過去のデータを月別・一括で分析する":
     if db_df.empty:
         st.warning("まだ保存されているデータがありません。「🆕 新しいアンケートを読み込む」からデータを追加してください。")
     else:
-        # 月別絞り込み機能
         months = ["すべての月"] + sorted(list(db_df["登録月"].unique()))
         selected_month = st.selectbox("📅 分析する月を選んでください", months)
         
