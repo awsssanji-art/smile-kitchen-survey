@@ -161,7 +161,7 @@ if app_mode == "🆕 新しいアンケートを読み込む":
                     
                     current_page_num += 1
                     progress_bar.progress(current_page_num / total_pages, text=f"処理中... ({current_page_num}/{total_pages}ページ完了)")
-                    time.sleep(4) # スピード制限回避
+                    time.sleep(6) # スピード制限回避
             
             progress_bar.empty()
             
